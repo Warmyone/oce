@@ -36,6 +36,11 @@ set(OCE_ABI_VERSION ${OCE_ABI_SOVERSION}.0.0)
 # Set the minimum version of cmake required to 2.6
 cmake_minimum_required( VERSION 2.6 )
 
+# Policy CMP0053 introduced in cmake version 3.1, to use '_' in 'string(REPLACE' variables
+cmake_policy(SET CMP0053 NEW)
+# Policy CMP0054 introduced in cmake version 3.1, to better compare vars in if's (https://stackoverflow.com/questions/19982340/cmake-compare-to-empty-string-with-strequal-failed)
+cmake_policy(SET CMP0054 NEW)
+
 # Policy CMP0043 introduced in cmake version 3.0 IGNORES the use of COMPILE_DEFINITIONS suffixed variables, e.g. COMPILE_DEFINITIONS_DEBUG
 # Set to OLD behavior until minimum cmake version >= 2.8.10 (version that COMPILE_DEFINITIONS can be set by generator expressions instead)
 if (POLICY CMP0043)
@@ -928,22 +933,6 @@ if(NOT DEFINED OCE_INSTALL_CMAKE_DATA_DIR)
 	endif(WIN32)
 endif(NOT DEFINED OCE_INSTALL_CMAKE_DATA_DIR)
 
-# This relative path is written into OCEConfig.cmake to set OCE_INCLUDE_DIRS relative to OCEConfig.cmake
-# There is no need to prepend OCE_INSTALL_PREFIX, CMake convention is to use slashes.
-# The first part is required if -DOCE_INSTALL_CMAKE_DATA_DIR and -DOCE_INSTALL_INCLUDE_DIR are not both absolute paths.
-if(IS_ABSOLUTE ${OCE_INSTALL_CMAKE_DATA_DIR})
-	set(_OCE_INSTALL_CMAKE_DATA_DIR ${OCE_INSTALL_CMAKE_DATA_DIR})
-else(IS_ABSOLUTE ${OCE_INSTALL_CMAKE_DATA_DIR})
-	set(_OCE_INSTALL_CMAKE_DATA_DIR ${CMAKE_INSTALL_PREFIX}/${OCE_INSTALL_CMAKE_DATA_DIR})
-endif(IS_ABSOLUTE ${OCE_INSTALL_CMAKE_DATA_DIR})
-if(IS_ABSOLUTE ${OCE_INSTALL_INCLUDE_DIR})
-	set(_OCE_INSTALL_INCLUDE_DIR ${OCE_INSTALL_INCLUDE_DIR})
-else(IS_ABSOLUTE ${OCE_INSTALL_INCLUDE_DIR})
-	set(_OCE_INSTALL_INCLUDE_DIR ${CMAKE_INSTALL_PREFIX}/${OCE_INSTALL_INCLUDE_DIR})
-endif(IS_ABSOLUTE ${OCE_INSTALL_INCLUDE_DIR})
-# Now the relative path can be generated
-file(RELATIVE_PATH OCE_CMAKE_DATA_TO_INCLUDE_RELATIVE_DIR "${_OCE_INSTALL_CMAKE_DATA_DIR}" "${_OCE_INSTALL_INCLUDE_DIR}")
-
 foreach(RESOURCE_FILE ${INSTALL_RESOURCE_FILES})
 	get_filename_component(RESOURCE_PATH ${RESOURCE_FILE} PATH)
 	install(FILES ${RESOURCE_FILE}
@@ -998,6 +987,63 @@ configure_file (${CMAKE_CURRENT_SOURCE_DIR}/adm/cmake/config/Version.rc.cmake
 				${CMAKE_CURRENT_BINARY_DIR}/Version.rc)
 set ( OCE_WIN32_RES_FILE ${CMAKE_CURRENT_BINARY_DIR}/Version.rc )
 endif(NOT OCE_NO_LIBRARY_VERSION)
+
+# Setup freetype variables
+if (OCE_REQUIRES_FREETYPE)
+	# get release lib vars
+	get_filename_component(FREETYPE_LIB_DIR "${FREETYPE_LIBRARY}" PATH)
+	get_filename_component(FREETYPE_LIB_NAME "${FREETYPE_LIBRARY}" NAME)
+	if ("${FREETYPE_LIB_NAME}" STREQUAL "")
+		set(FREETYPE_LIB_NAME ${CMAKE_STATIC_LIBRARY_PREFIX}freetype.${OCE_LIB_EXTENSION})
+	endif()
+
+	# get release bin vars
+	get_filename_component(FREETYPE_BIN_DIR "${FREETYPE_BINARY}" PATH)
+	if ("${FREETYPE_BIN_DIR}" STREQUAL "")
+		set(FREETYPE_BIN_DIR ${FREETYPE_LIB_DIR})
+	endif()
+	get_filename_component(FREETYPE_BIN_NAME "${FREETYPE_BINARY}" NAME)
+	if ("${FREETYPE_BIN_NAME}" STREQUAL "")
+		get_filename_component(FREETYPE_LIB_NAME_STEM ${FREETYPE_LIB_NAME} NAME_WLE)
+		set(FREETYPE_BIN_NAME ${FREETYPE_LIB_NAME_STEM}.dll)
+	endif()
+
+	if (CMAKE_CONFIGURATION_OPTIONS)
+		# get debug lib vars
+		get_filename_component(FREETYPE_LIB_DIR_DBG "${FREETYPE_LIBRARY_DEBUG}" PATH)
+		get_filename_component(FREETYPE_LIB_NAME_DBG "${FREETYPE_LIBRARY_DEBUG}" NAME)
+		if ("${FREETYPE_LIB_NAME_DBG}" STREQUAL "")
+			set(FREETYPE_LIB_NAME_DBG ${CMAKE_STATIC_LIBRARY_PREFIX}freetyped.${OCE_LIB_EXTENSION})
+		endif()
+
+		# get debug bin vars
+		get_filename_component(FREETYPE_BIN_DIR_DBG "${FREETYPE_BINARY_DEBUG}" PATH)
+		if ("${FREETYPE_BIN_DIR_DBG}" STREQUAL "")
+			set(FREETYPE_BIN_DIR_DBG ${FREETYPE_LIB_DIR_DBG})
+		endif()
+		get_filename_component(FREETYPE_BIN_NAME_DBG "${FREETYPE_BINARY_DEBUG}" NAME)
+		if ("${FREETYPE_BIN_NAME_DBG}" STREQUAL "")
+			get_filename_component(FREETYPE_LIB_NAME_STEM_DBG ${FREETYPE_LIB_NAME_DBG} NAME_WLE)
+			set(FREETYPE_BIN_NAME_DBG ${FREETYPE_LIB_NAME_STEM_DBG}.dll)
+		endif()
+	else()
+		# use release vars for debug
+		set(FREETYPE_LIB_DIR_DBG ${FREETYPE_LIB_DIR})
+		set(FREETYPE_LIB_NAME_DBG ${FREETYPE_LIB_NAME})
+		set(FREETYPE_BIN_DIR_DBG ${FREETYPE_BIN_DIR})
+		set(FREETYPE_BIN_NAME_DBG ${FREETYPE_BIN_NAME})
+	endif()
+
+	# setup vars to link the files later
+	set(FREETYPE_LIB "${FREETYPE_LIB_DIR}/${FREETYPE_LIB_NAME}")
+	set(FREETYPE_INSTALLED_LIB "${CMAKE_INSTALL_PREFIX}/${OCE_INSTALL_LIB_DIR}/${FREETYPE_LIB_NAME}")
+	set(FREETYPE_LIB_DBG "${FREETYPE_LIB_DIR_DBG}/${FREETYPE_LIB_NAME_DBG}")
+	set(FREETYPE_INSTALLED_LIB_DBG "${CMAKE_INSTALL_PREFIX}/${OCE_INSTALL_LIB_DIR}/${FREETYPE_LIB_NAME_DBG}")
+
+	# To make OCE builds portable, use relative path for the freeType library.
+	# Include the cmake file, which adds the lib, here for TOOLKITS to be able to link against the freeTpye libary.
+	include(CreateFreeTypeTarget.cmake)
+endif()
 
 macro(process_module modulename modules_std)
 	set(modules ${modules_std})
@@ -1068,8 +1114,19 @@ if(OCE_DRAW)
 	process_module( "Draw" "" "TKDraw;TKTopTest;${oce_vtk_component};TKViewerTest;TKXSDRAW;TKDCAF;TKXDEDRAW;TKTObjDRAW;${oce_tcl_component};DRAWEXE" )
 endif(OCE_DRAW)
 
-configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/adm/cmake/config/ProjectConfig.cmake.in
-	${CMAKE_CURRENT_BINARY_DIR}/OCEConfig.cmake @ONLY )
+include(CMakePackageConfigHelpers)
+# To make OCE builds portable, use relative path for the freeType library.
+# Load the cmake file, which adds the lib, into a variable and insert it into 'ProjectConfig.cmake.in' at '@CREATE_FREETYPE_TARGET@'.
+# This is done separate form 'configure_package_config_file' because the cmake file, which adds the lib, contains other '@VARS@' which would not be resolved otherwise.
+file(READ CreateFreeTypeTarget.cmake CREATE_FREETYPE_TARGET)
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/adm/cmake/config/ProjectConfig.cmake.in PROJECT_CONFIG_FILE_TMP)
+string(REPLACE "@CREATE_FREETYPE_TARGET@" "${CREATE_FREETYPE_TARGET}" PROJECT_CONFIG_FILE_TMP ${PROJECT_CONFIG_FILE_TMP})
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/OCEConfig_TMP.cmake ${PROJECT_CONFIG_FILE_TMP})
+configure_package_config_file( ${CMAKE_CURRENT_BINARY_DIR}/OCEConfig_TMP.cmake
+	${CMAKE_CURRENT_BINARY_DIR}/OCEConfig.cmake
+	INSTALL_DESTINATION ${OCE_INSTALL_CMAKE_DATA_DIR}
+	PATH_VARS FREETYPE_INSTALLED_LIB FREETYPE_INSTALLED_LIB_DBG OCE_INSTALL_CMAKE_DATA_DIR OCE_INSTALL_INCLUDE_DIR
+)
 configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/adm/cmake/config/ProjectConfigVersion.cmake.in
 	${CMAKE_CURRENT_BINARY_DIR}/OCEConfigVersion.cmake @ONLY )
 install(FILES ${PROJECT_BINARY_DIR}/OCEConfig.cmake ${PROJECT_BINARY_DIR}/OCEConfigVersion.cmake
@@ -1133,20 +1190,16 @@ if (OCE_AUTOINSTALL_DEPENDENT_LIBS)
 		SET(OCE_LIB_EXTENSION "lib")
 	ENDIF()
 
-	if (OCE_VISU_DEP AND OCE_REQUIRES_FREETYPE)
-		get_filename_component(FREETYPE_BIN_DIR ${FREETYPE_LIBRARY} PATH)
-		if (CMAKE_CONFIGURATION_OPTIONS)
-          get_filename_component(FREETYPE_BIN_DIR_DBG ${FREETYPE_LIBRARY_DEBUG} PATH)
-        else()
-          set(FREETYPE_BIN_DIR_DBG ${FREETYPE_BIN_DIR})
-        endif()
-		install(FILES ${FREETYPE_BIN_DIR_DBG}/${CMAKE_SHARED_LIBRARY_PREFIX}freetyped.dll DESTINATION ${OCE_INSTALL_BIN_DIR} CONFIGURATIONS Debug OPTIONAL)
-    	install(FILES ${FREETYPE_BIN_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}freetype.dll DESTINATION ${OCE_INSTALL_BIN_DIR} CONFIGURATIONS Release RelWithDebInfo MinSizeRel OPTIONAL)
-    	install(FILES ${FREETYPE_BIN_DIR_DBG}/${CMAKE_STATIC_LIBRARY_PREFIX}freetyped.${OCE_LIB_EXTENSION} DESTINATION ${OCE_INSTALL_LIB_DIR} CONFIGURATIONS Debug OPTIONAL)
-    	install(FILES ${FREETYPE_BIN_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}freetype.${OCE_LIB_EXTENSION} DESTINATION ${OCE_INSTALL_LIB_DIR} CONFIGURATIONS Release RelWithDebInfo MinSizeRel OPTIONAL)
-    	if(OCE_INSTALL_PDB_FILES)
-	    	install(FILES ${FREETYPE_BIN_DIR_DBG}/freetyped.pdb DESTINATION ${OCE_INSTALL_LIB_DIR} CONFIGURATIONS Debug OPTIONAL)
-			install(FILES ${FREETYPE_BIN_DIR}/freetype.pdb DESTINATION ${OCE_INSTALL_LIB_DIR} CONFIGURATIONS Release RelWithDebInfo MinSizeRel OPTIONAL)
+	if (OCE_VISU_DEP AND OCE_REQUIRES_FREETYPE)	
+		install(FILES ${FREETYPE_LIB} DESTINATION ${OCE_INSTALL_LIB_DIR} CONFIGURATIONS Release RelWithDebInfo MinSizeRel)
+		install(FILES ${FREETYPE_LIB_DBG} DESTINATION ${OCE_INSTALL_LIB_DIR} CONFIGURATIONS Debug)
+		install(FILES ${FREETYPE_BIN_DIR}/${FREETYPE_BIN_NAME} DESTINATION ${OCE_INSTALL_BIN_DIR} CONFIGURATIONS Release RelWithDebInfo MinSizeRel)
+		install(FILES ${FREETYPE_BIN_DIR_DBG}/${FREETYPE_BIN_NAME_DBG} DESTINATION ${OCE_INSTALL_BIN_DIR} CONFIGURATIONS Debug)
+		if(OCE_INSTALL_PDB_FILES)
+			get_filename_component(FREETYPE_BIN_NAME_STEM ${FREETYPE_BIN_NAME} NAME_WLE)
+			install(FILES ${FREETYPE_BIN_DIR}/${FREETYPE_BIN_NAME_STEM}.pdb DESTINATION ${OCE_INSTALL_LIB_DIR} CONFIGURATIONS Release RelWithDebInfo MinSizeRel)
+			get_filename_component(FREETYPE_BIN_NAME_STEM_DBG ${FREETYPE_BIN_NAME_DBG} NAME_WLE)
+			install(FILES ${FREETYPE_BIN_DIR_DBG}/${FREETYPE_BIN_NAME_STEM_DBG}.pdb DESTINATION ${OCE_INSTALL_LIB_DIR} CONFIGURATIONS Debug)
 		endif()
 	endif(OCE_VISU_DEP AND OCE_REQUIRES_FREETYPE)
 

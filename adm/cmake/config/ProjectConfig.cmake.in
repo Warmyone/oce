@@ -14,13 +14,14 @@
 # toolkits are found, otherwise FALSE.  In the latter case,
 # OCE_MISSING_TOOLKITS contains the list of missing toolkits.
 
-# Tell the user project where to find our headers and libraries
-get_filename_component(SELF_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+@PACKAGE_INIT@
 
-set(OCE_INCLUDE_DIRS "${SELF_DIR}/@OCE_CMAKE_DATA_TO_INCLUDE_RELATIVE_DIR@")
+@CREATE_FREETYPE_TARGET@
+
+set_and_check(OCE_INCLUDE_DIRS "@PACKAGE_OCE_INSTALL_INCLUDE_DIR@")
 set(OCE_LIBRARIES "@OCE_LIBRARIES@")
 set(OCE_ALL_BUILT_MODULES "@OCE_ALL_BUILT_MODULES@")
-include("${SELF_DIR}/OCE-libraries.cmake")
+include("@PACKAGE_OCE_INSTALL_CMAKE_DATA_DIR@/OCE-libraries.cmake")
 
 set(OCE_ALL_FOUND true)
 if(OCE_FIND_COMPONENTS)
