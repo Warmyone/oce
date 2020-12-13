@@ -361,9 +361,9 @@ if(OCE_VISUALISATION AND OCE_WITH_VTK)
 	# Now that we know we have a VTK version available, we call find_package with the correct rendering backend.
 	if( NOT(VTK_VERSION_MAJOR LESS 7) AND VTK_RENDERING_BACKEND)
 		# In VTK 7, the rendering backend is exported in the variable VTK_RENDERING_BACKEND
-		find_package(VTK QUIET COMPONENTS vtkRendering${VTK_RENDERING_BACKEND} vtkCommonCore vtkInteractionStyle vtkIOExport vtkIOLegacy)
+		find_package(VTK COMPONENTS vtkRendering${VTK_RENDERING_BACKEND} vtkCommonCore vtkInteractionStyle vtkIOExport vtkIOLegacy REQUIRED)
 	else()
-		find_package(VTK QUIET COMPONENTS vtkRenderingOpenGL vtkCommonCore vtkInteractionStyle vtkIOExport vtkIOLegacy)
+		find_package(VTK COMPONENTS vtkRenderingOpenGL vtkCommonCore vtkInteractionStyle vtkIOExport vtkIOLegacy REQUIRED)
 	endif()
 
 	if (TARGET vtkRenderingOpenGL2)
